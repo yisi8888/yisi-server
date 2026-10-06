@@ -1,0 +1,6 @@
+{
+  "name": "Yisi Server",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:20",
+  "forwardPorts": [8080],
+  "postStartCommand": "cd /workspaces/yisi-server && nohup node server.js > /tmp/server.log 2>&1 &"
+}
