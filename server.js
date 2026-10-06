@@ -27,7 +27,7 @@ const AVATAR_COLORS = ['#1E6FFF', '#FF6F1E', '#12B76A', '#9B51E0', '#F04438', '#
 
 function emptyDb() {
   return {
-    users: [],        // {id, username, password, salt, nickname, bio, avatarColor, time}
+    users: [],        // {id, username, nickname, bio, avatarColor, time}  // 不存密码（本地账号模式）
     posts: [],        // {id, uid, content, time, likes:[uid], comments:[{uid, content, time}]}
     messages: [],     // {id, from, to, content, time}
     apps: [],         // {id, uid, name, icon, category, version, desc, downloadUrl, size, status, reason, time, auditTime}
@@ -211,22 +211,17 @@ route('GET', '/api/users', async (req, res) => {
   ok(res, { users: list });
 });
 
-/* 注册 */
+/* 注册（本地账号模式：密码存在各用户手机，服务器只存公开信息，不存密码） */
 route('POST', '/api/register', async (req, res) => {
   const b = await parseBody(req);
   const username = normalizeName(b.username);
-  const password = String(b.password || '');
   const nickname = normalizeName(b.nickname) || username;
   if (!username || username.length < 2 || username.length > 20) return fail(res, 400, '用户名需 2-20 个字符');
-  if (!password || password.length < 6) return fail(res, 400, '密码至少 6 位');
   if (username === ADMIN_USERNAME) return fail(res, 400, '该用户名已被占用');
   if (db.users.some(u => u.username === username)) return fail(res, 409, '用户名已被注册');
-  const salt = crypto.randomBytes(8).toString('hex');
   const user = {
     id: db.seq.user++,
     username,
-    password: sha256(password + salt),
-    salt,
     nickname,
     bio: '这个人很懒~',
     avatarColor: AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)],
@@ -239,12 +234,12 @@ route('POST', '/api/register', async (req, res) => {
   ok(res, { token, user: publicUser(user) });
 });
 
-/* 登录（含管理员） */
+/* 登录（含管理员）：普通用户密码由APP在本机验证，服务器不校验密码 */
 route('POST', '/api/login', async (req, res) => {
   const b = await parseBody(req);
   const username = normalizeName(b.username);
   const password = String(b.password || '');
-  if (!username || !password) return fail(res, 400, '请输入用户名和密码');
+  if (!username) return fail(res, 400, '请输入用户名');
 
   if (username === ADMIN_USERNAME) {
     if (password !== ADMIN_PASSWORD) return fail(res, 401, '用户名或密码错误');
@@ -255,7 +250,7 @@ route('POST', '/api/login', async (req, res) => {
   }
 
   const u = db.users.find(x => x.username === username);
-  if (!u || u.password !== sha256(password + u.salt)) return fail(res, 401, '用户名或密码错误');
+  if (!u) return fail(res, 401, '该用户名未注册');
   const token = newToken();
   db.sessions[token] = u.id;
   saveDb();
